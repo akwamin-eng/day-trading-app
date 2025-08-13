@@ -1,3 +1,6 @@
 venv/
 keys/
-*.json # except if needed
+*.json # Use single quotes to prevent globbing
+__pycache__/
+*.pyc
+.env
