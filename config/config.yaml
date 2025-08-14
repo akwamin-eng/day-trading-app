@@ -1,0 +1,49 @@
+# config/config.yaml
+#
+# Configuration file (no secrets).
+# All sensitive data loaded from GCP Secret Manager.
+
+# ----------------------------
+# Alpaca Markets API Settings
+# ----------------------------
+
+alpaca:
+  # Use paper trading (true) or live trading (false)
+  paper: true
+
+  # Symbols to track
+  symbols:
+    - "AAPL"
+    - "TSLA"
+    - "MSFT"
+
+  # Bar timeframe
+  timeframe: "1Min"
+
+
+# ----------------------------
+# Google Cloud Platform (GCP) Settings
+# ----------------------------
+
+gcp:
+  # Your GCP Project ID
+  project_id: "day-trading-app-468901"
+
+  # Region
+  region: "us-central1"
+
+  # Pub/Sub topics
+  pubsub:
+    market_data_topic: "market-data-bars"
+    news_data_topic: "news-sentiment"
+
+
+# ----------------------------
+# Application Behavior
+# ----------------------------
+
+app:
+  timezone: "US/Eastern"
+  debug: false
+  max_retries: 3
+  retry_delay: 2
