@@ -44,3 +44,28 @@ def get_alpaca_keys():
         "api_key": api_key,
         "secret_key": secret_key
     }
+
+def get_newsapi_key():
+    project_id = "day-trading-app-468901"
+    key = access_secret(project_id, "newsapi-key")
+    return key.strip()  # Removes any accidental whitespace or newlines
+
+def get_tiingo_api_token():
+    project_id = "day-trading-app-468901"
+    token = access_secret(project_id, "tiingo-api-token")
+    return token.strip()  # Defensive: remove any whitespace/newlines
+
+def get_alphavantage_key():
+    """
+    Get Alpha Vantage API key from Secret Manager.
+    """
+    project_id = "day-trading-app-468901"
+    return access_secret(project_id, "alphavantage-key").strip()
+
+def get_paper_api_key():
+    project_id = "day-trading-app-468901"
+    return access_secret(project_id, "alpaca-paper-api-key").strip()
+
+def get_paper_secret_key():
+    project_id = "day-trading-app-468901"
+    return access_secret(project_id, "alpaca-paper-secret-key").strip()

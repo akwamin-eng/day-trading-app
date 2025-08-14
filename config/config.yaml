@@ -36,7 +36,9 @@ gcp:
   pubsub:
     market_data_topic: "market-data-bars"
     news_data_topic: "news-sentiment"
-
+    enriched_features_topic: "enriched-features"
+    news_data_topic: "news-sentiment"
+    trading_signals_topic: "trading-signals"
 
 # ----------------------------
 # Application Behavior
@@ -47,3 +49,19 @@ app:
   debug: false
   max_retries: 3
   retry_delay: 2
+
+# ----------------------------
+# Tiingo API
+# ----------------------------
+
+tiingo:
+  enabled: true
+  # Key loaded from Secret Manager
+
+# ----------------------------
+# Alpha Vantage API
+# ----------------------------
+
+alphavantage:
+  enabled: true
+  # Key loaded securely from GCP Secret Manager

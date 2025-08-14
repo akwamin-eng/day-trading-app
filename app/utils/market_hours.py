@@ -1,10 +1,11 @@
-k# app/utils/market_hours.py
+# app/utils/market_hours.py
 
 """
 Utility functions to determine if the U.S. stock market is open.
 Respects trading hours and weekends.
 """
 
+import asyncio
 from datetime import datetime, time, timedelta
 import pytz
 
@@ -91,5 +92,5 @@ async def wait_until_market_open():
         wait_seconds = (next_open - now).total_seconds()
         wait_minutes = wait_seconds / 60
 
-        print(f"💤 Market closed. Waiting {wait_minutes:.1f} minutes until 9:30 AM ET...")
+        print(f"💤 Market closed. Waiting {wait_minutes:.1f} minutes until next market open (9:30 AM ET)...")
         await asyncio.sleep(min(wait_seconds, 60))  # Wake every 60 sec to recheck

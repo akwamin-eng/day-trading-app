@@ -1,32 +1,49 @@
-k# main.py
-
+# main.py
 """
-Main launcher for the trading app.
-Respects market hours and starts ingestion when market opens.
+Production entry point for AI trading system.
+Starts all services: ingestion, feature engine, sentiment, ML, execution.
 """
 
-import asyncio
-from datetime import datetime
+import os
+import subprocess
+import time
+import signal
+import sys
 
-# Local modules
-from app.utils.market_hours import is_market_open, wait_until_market_open
-from app.data.ingest import main as run_ingestion
+# List of services to run
+SERVICES = [
+    "python -c 'from app.data.ingest import start_ingest; start_ingest()'",
+    "python -c 'from app.features.subscriber import start_feature_subscriber; start_feature_subscriber()'",
+    "python -c 'from app.sentiment.fetcher import start_news_sentiment_pipeline; start_news_sentiment_pipeline()'",
+    "python -c 'from app.ml.subscriber import start_ml_merger; start_ml_merger()'",
+    "python -c 'from app.execution.executor import start_executor; start_executor()'"
+]
 
+processes = []
 
-async def launch_trading_app():
-    print(f"🎯 Trading app started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+def signal_handler(signum, frame):
+    print("\n🛑 Shutting down all services...")
+    for p in processes:
+        p.terminate()
+    for p in processes:
+        p.wait()
+    sys.exit(0)
 
-    while True:
-        if is_market_open():
-            print("🟢 MARKET IS OPEN — Starting data ingestion...")
-            try:
-                await run_ingestion()
-            except Exception as e:
-                print(f"❌ Error during ingestion: {e}")
-        else:
-            print(f"🌙 {datetime.now().strftime('%H:%M:%S')} — Market closed. Waiting...")
-            await wait_until_market_open()
-
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 if __name__ == "__main__":
-    asyncio.run(launch_trading_app())
+    print("🚀 Starting AI Trading System...")
+
+    for cmd in SERVICES:
+        print(f"✅ Starting: {cmd}")
+        p = subprocess.Popen(cmd, shell=True)
+        processes.append(p)
+        time.sleep(2)  # Stagger startup
+
+    try:
+        # Keep main process alive
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        signal_handler(None, None)
