@@ -18,6 +18,14 @@ from alpaca.data.live import StockDataStream
 from app.utils.market_hours import is_market_open
 from app.utils.secrets import get_alpaca_keys
 
+# Add this import at the top (near others)
+from app.utils.publisher import publish_bar
+from app.utils.config import get_config
+
+# Load config once at module level
+config = get_config()
+GCP_PROJECT_ID = config['gcp']['project_id']
+MARKET_DATA_TOPIC = config['gcp']['pubsub']['market_data_topic']
 
 # ----------------------------
 # Load Config
@@ -53,20 +61,39 @@ wss_client = StockDataStream(API_KEY, SECRET_KEY)
 
 
 # ----------------------------
-# Bar Event Handler
+# Updated Bar Event Handler
 # ----------------------------
 
 async def on_bar(bar):
-    print(f"""
-📈 NEW BAR: {bar.symbol}
-  Time:    {bar.timestamp.strftime('%Y-%m-%d %H:%M')}
-  Open:    ${bar.open:.2f}
-  High:    ${bar.high:.2f}
-  Low:     ${bar.low:.2f}
-  Close:   ${bar.close:.2f}
-  Volume:  {bar.volume}
-  ---""")
+    """
+    Callback: Called when a new 1-minute bar is received.
+    Converts bar to dict and publishes to GCP Pub/Sub.
+    """
+    # Convert bar to dictionary
+    bar_dict = {
+        "symbol": bar.symbol,
+        "open": round(float(bar.open), 2),
+        "high": round(float(bar.high), 2),
+        "low": round(float(bar.low), 2),
+        "close": round(float(bar.close), 2),
+        "volume": int(bar.volume),
+        "timestamp": bar.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+        "data_source": "alpaca"
+    }
 
+    # Publish to Pub/Sub
+    publish_bar(GCP_PROJECT_ID, MARKET_DATA_TOPIC, bar_dict)
+
+    # Optional: Also print to console
+    print(f"""
+📈 BAR PUBLISHED: {bar_dict['symbol']}
+  Time:    {bar_dict['timestamp']}
+  Open:    ${bar_dict['open']}
+  High:    ${bar_dict['high']}
+  Low:     ${bar_dict['low']}
+  Close:   ${bar_dict['close']}
+  Volume:  {bar_dict['volume']}
+  ---""")
 
 # ----------------------------
 # Main: Run Ingestion
