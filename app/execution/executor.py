@@ -12,7 +12,7 @@ from alpaca.trading.enums import OrderSide, TimeInForce
 from google.cloud import pubsub_v1
 from app.utils.secrets import get_paper_api_key, get_paper_secret_key
 from app.risk.position import get_position_size
-from app.utils.telegram import send_sync
+from app.utils.telegram_alerts import send_sync
 import json
 import logging
 import os

@@ -11,6 +11,7 @@ import signal
 import sys
 import threading
 from datetime import datetime
+from app.utils.telegram_alerts import send_sync
 
 # Local modules
 from app.utils.config import get_config

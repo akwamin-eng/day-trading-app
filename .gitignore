@@ -23,3 +23,7 @@ __pycache__/
 app/sentiment/models/
 Miniforge3-*.sh
 .pyenv/
+app/sentiment/models/
+/Users/alexkwamin/Desktop/GOOGLE_APPLICATION_CREDENTIALS/
+*.json # Or be specific
+day-trading-app-468901-86e21748f637.json

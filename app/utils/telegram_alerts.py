@@ -1,22 +1,42 @@
 # app/utils/telegram.py
 
+"""
+Telegram Alert System
+Sends secure alerts to Telegram using python-telegram-bot v21.7 (async).
+Includes sync wrapper for use in non-async code.
+"""
+
 import asyncio
 import logging
 from telegram import Bot
 
-# ✅ Hardcoded config — no need for YAML or get_config()
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+
+# --- Configuration ---
+# Option 1: Hardcoded (for quick setup)
 TELEGRAM_TOKEN = "7856499764:AAHEDWJaz1KukBn-2gjVx5ea0LHfZPZpFoI"
 CHAT_ID = "7930119115"
 
-# Initialize bot
+# Option 2: Use environment variables (recommended for production)
+# import os
+# TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "your-default-token")
+# CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "your-default-chat-id")
+
+# Initialize the bot
 bot = Bot(token=TELEGRAM_TOKEN)
+
 
 async def send_telegram_message(message: str):
     """
-    Send a message to Telegram.
+    Send a message to Telegram (async).
     """
     try:
-        await bot.send_message(chat_id=CHAT_ID, text=message, parse_mode="Markdown")
+        await bot.send_message(
+            chat_id=CHAT_ID,
+            text=message,
+            parse_mode="Markdown"  # Optional: use Markdown for formatting
+        )
         logging.info("✅ Telegram alert sent")
     except Exception as e:
         logging.error(f"❌ Failed to send Telegram message: {e}")
@@ -25,7 +45,7 @@ async def send_telegram_message(message: str):
 def send_sync(message: str):
     """
     Synchronous wrapper for sending Telegram messages.
-    Use this in non-async functions.
+    Use this in non-async functions (e.g., trade execution, risk management).
     """
     try:
         asyncio.run(send_telegram_message(message))
@@ -34,19 +54,6 @@ def send_sync(message: str):
 
 
 # === Alert Functions ===
-
-def market_closed_alert():
-    """
-    Send hourly health check when market is closed.
-    """
-    message = f"""
-🕒 **Market Closed**  
-✅ AI Trader is running  
-🕒 {get_timestamp()}  
-📡 Waiting for market open...
-    """.strip()
-    send_sync(message)
-
 
 def market_open_alert(starting_balance: float):
     """
@@ -78,7 +85,7 @@ def market_close_summary(ending_balance: float, daily_pnl: float, total_trades: 
     send_sync(message)
 
 
-def trade_executed(symbol: str, action: str, qty: int, price: float, confidence: float):
+def trade_executed(symbol: str, action: str, qty: int, price: float, confidence: float = 1.0):
     """
     Send alert when a trade is executed.
     """
@@ -123,13 +130,13 @@ def get_timestamp() -> str:
     from datetime import datetime
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+
 def get_date() -> str:
     from datetime import datetime
     return datetime.now().strftime('%Y-%m-%d')
 
 
 # === Test Function (Optional) ===
-
 if __name__ == "__main__":
     print("🧪 Testing Telegram alerts...")
     send_sync("🤖 Test: AI Trader is online and ready.")
