@@ -65,3 +65,12 @@ tiingo:
 alphavantage:
   enabled: true
   # Key loaded securely from GCP Secret Manager
+
+# ----------------------------
+# Telegram
+# ----------------------------
+
+telegram:
+  token: "7856499764:AAHEDWJaz1KukBn-2gjVx5ea0LHfZPZpFoI"
+  chat_id: "7930119115"
+
