@@ -16,3 +16,10 @@ app/sentiment/*.pt
 *.bin
 *.pt
 *.pkl
+venv/
+.venv/
+__pycache__/
+*.pyc
+app/sentiment/models/
+Miniforge3-*.sh
+.pyenv/
