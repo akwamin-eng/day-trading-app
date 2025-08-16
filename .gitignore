@@ -1,3 +1,7 @@
+echo "app/sentiment/models/" >> .gitignore
+echo "Miniforge3-*.sh" >> .gitignore
+git add .gitignore
+git commit -m "chore: prevent large file commits"
 venv/
 keys/
 *.json # Use single quotes to prevent globbing

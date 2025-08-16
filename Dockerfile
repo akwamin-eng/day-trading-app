@@ -4,7 +4,10 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first
+# Upgrade pip first
+RUN pip install --upgrade pip
+
+# Copy requirements
 COPY requirements.txt .
 
 # Install dependencies
