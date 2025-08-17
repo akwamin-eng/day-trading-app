@@ -1,48 +1,9 @@
-# Pin filelock first to avoid conda build issues
-filelock==3.16.1
-
-# Core
-python-telegram-bot==21.7
-requests==2.32.4
-PyYAML==6.0.2
-pandas==2.3.0
-numpy==1.26.4
-scikit-learn==1.7.0
-joblib==1.5.1
-tqdm==4.67.1
-typing-extensions==4.12.2
-packaging==25.0
-
-# Alpaca
 alpaca-py==0.42.0
-
-# NLP & Sentiment
-transformers==4.40.0
-torch==2.1.0
-tokenizers==0.19.1
-sentencepiece==0.2.0
-safetensors==0.4.5
-nltk==3.9.1
-textblob==0.19.0
-huggingface-hub==0.34.4
-
-# Technical Indicators
-pandas-ta==0.3.14b0
-
-# Google Cloud
-google-cloud-pubsub==2.31.1
-google-cloud-secret-manager==2.24.0
-google-cloud-storage==2.18.0
-google-api-core==2.25.1
-google-auth==2.40.3
-protobuf==5.29.5
-grpcio==1.73.1
-proto-plus==1.26.1
-
-# Async
-anyio==4.9.0
-httpx==0.28.1
-
-# News
-feedparser==6.0.11
-gnews==0.4.1
+yfinance==0.2.65
+pandas==2.3.1
+numpy==2.3.2
+requests==2.32.4
+pydantic==2.11.7
+tenacity==9.1.2
+pybreaker==1.4.0
+beautifulsoup4==4.13.4
