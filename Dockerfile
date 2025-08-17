@@ -1,20 +1,27 @@
-# Use Python 3.10 slim image
-FROM python:3.10-slim
+# Dockerfile
 
-# Set working directory
+FROM python:3.11-slim
+
 WORKDIR /app
 
-# Upgrade pip first
-RUN pip install --upgrade pip
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements
 COPY requirements.txt .
 
-# Install dependencies
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the app
+# Copy application
 COPY . .
+
+# Expose port
+ENV PORT=8080
+EXPOSE 8080
 
 # Run the app
 CMD ["python", "main.py"]
