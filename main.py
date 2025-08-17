@@ -4,12 +4,13 @@
 Elite AI Trader
 Phase 5: Signal Fusion & Paper Trading
 Runs daily, executes high-conviction paper trades.
+All data from FMP, Alpha Vantage, GNews — no yfinance.
 """
-
+import json
 import logging
 import sys
 from datetime import datetime
-from typing import List, Optional
+import os
 
 # Set up logging
 logging.basicConfig(
@@ -20,10 +21,16 @@ logging.basicConfig(
     ]
 )
 
+# Add project root to path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 # Import modules
 from app.signals.fusion import generate_fused_signal, execute_paper_trade
 from app.utils.telegram_alerts import send_sync
-from app.learning.self_learning import update_strategy_weights
+
+# Paths
+LOGS_DIR = "trading_logs"
+WEIGHTS_FILE = os.path.join(LOGS_DIR, "signal_weights.json")
 
 
 def log_startup():
@@ -33,6 +40,22 @@ def log_startup():
     send_sync(f"🔄 AI Trader: Daily cycle started at {datetime.now().strftime('%H:%M')}")
 
 
+def log_trade(symbol: str, signals: dict, confidence: float, action: str = "buy"):
+    """Log a trade decision for future analysis and self-learning."""
+    os.makedirs(LOGS_DIR, exist_ok=True)
+    log_entry = {
+        "symbol": symbol,
+        "action": action,
+        "confidence": confidence,
+        "signals": signals,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    log_file = os.path.join(LOGS_DIR, "weekly_trades.jsonl")
+    with open(log_file, "a") as f:
+        f.write(json.dumps(log_entry) + "\n")
+    logging.info(f"📊 Logged trade: {log_entry}")
+
+
 def run_daily_trading_cycle():
     """Main trading loop: generate signals and execute paper trades."""
     log_startup()
@@ -40,8 +63,8 @@ def run_daily_trading_cycle():
     # List of stocks to monitor
     watchlist = ["RARE", "NVDA", "TSLA", "AAPL", "MSFT", "GOOGL", "META", "AMD"]
 
-    # Simulate political buys from FMP (replace with real data later)
-    political_buys = ["RARE", "NVDA"]  # Example: Rep bought RARE
+    # Simulate political buys (replace with real FMP data)
+    political_buys = ["RARE"]  # Example: Rep bought RARE
 
     executed_trades = 0
 
@@ -53,6 +76,18 @@ def run_daily_trading_cycle():
 
             if signal:
                 execute_paper_trade(signal)
+                # Log the trade for self-learning
+                log_trade(
+                    symbol=symbol,
+                    confidence=signal["confidence"],
+                    signals={
+                        "political": political_buy,
+                        "sentiment": True,  # Replace with real sentiment flag
+                        "fundamentals": True,  # Replace with real check
+                        "technical": True  # Replace with real check
+                    },
+                    action="buy"
+                )
                 executed_trades += 1
             else:
                 logging.info(f"❌ No signal for {symbol}")
@@ -78,6 +113,7 @@ def run_weekly_review():
         send_sync("📅 Starting weekly AI review...")
 
         try:
+            from app.learning.self_learning import update_strategy_weights
             update_strategy_weights()
             send_sync("✅ Weekly AI review complete. Strategy updated.")
         except Exception as e:
