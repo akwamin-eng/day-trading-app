@@ -1,4 +1,5 @@
 # Dockerfile
+# CACHE_BUSTER=2025-08-18-1000   <-- Add this
 
 FROM python:3.11-slim
 
@@ -14,7 +15,9 @@ RUN apt-get update && \
 COPY requirements.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    python -c "from telegram import Bot; print('✅ Confirmed: telegram module is installed')"
 
 # Copy application
 COPY . .
