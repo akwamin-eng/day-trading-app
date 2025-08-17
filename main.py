@@ -78,7 +78,15 @@ def run_daily():
         send_sync(msg)
         return {"status": "paused"}, 200
 
-    # List of stocks to monitor
+    # Replace this:
+    # watchlist = ["RARE", "NVDA", "TSLA", "AAPL", "MSFT", "GOOGL", "META", "AMD"]
+
+    # With this:
+    from app.data.pipelines.dynamic_watchlist import build_dynamic_watchlist
+
+    watchlist = build_dynamic_watchlist()
+    if not watchlist:
+    logging.warning("⚠️ Dynamic watchlist empty. Using fallback.")
     watchlist = ["RARE", "NVDA", "TSLA", "AAPL", "MSFT", "GOOGL", "META", "AMD"]
 
     # Simulate political buys (replace with real FMP data later)

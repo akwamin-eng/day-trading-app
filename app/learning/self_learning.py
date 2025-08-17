@@ -2,154 +2,121 @@
 
 """
 Self-Learning Engine
-Analyzes past trades and adjusts signal weights to improve future performance.
-Runs weekly after the AI review.
+Analyzes weekly trades and updates signal weights.
+Runs every Sunday at 9 PM.
 """
 
 import json
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
-import os
+from typing import Dict, List
+from app.utils.telegram_alerts import send_sync
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-
-# Paths to logs and weights
+# Paths
 LOGS_DIR = "trading_logs"
-WEIGHTS_FILE = os.path.join(LOGS_DIR, "signal_weights.json")
+TRADES_FILE = f"{LOGS_DIR}/weekly_trades.jsonl"
+WEIGHTS_FILE = f"{LOGS_DIR}/signal_weights.json"
 
-# Default signal weights (0.0 to 1.0)
+# Default weights
 DEFAULT_WEIGHTS = {
-    "political": 1.0,        # House/Senate trades
-    "sentiment": 1.0,        # GNews / FinBERT sentiment
-    "fundamentals": 1.0,     # Alpha Vantage company health
-    "technical": 1.0         # RSI, Bollinger, trend
+    "political": 1.0,
+    "sentiment": 1.0,
+    "fundamentals": 1.0,
+    "technical": 1.0
 }
 
 
-def load_weights() -> Dict[str, float]:
-    """Load current signal weights from file, or return defaults."""
-    if not os.path.exists(WEIGHTS_FILE):
-        logging.info("⚙️ No existing weights found. Using defaults.")
-        return DEFAULT_WEIGHTS.copy()
-
+def load_trades() -> List[Dict]:
+    """Load all trades from the weekly log."""
     try:
-        with open(WEIGHTS_FILE, "r") as f:
-            weights = json.load(f)
-            logging.info(f"✅ Loaded weights: {weights}")
-            return weights
+        with open(TRADES_FILE, "r") as f:
+            return [json.loads(line) for line in f if line.strip()]
     except Exception as e:
-        logging.error(f"❌ Failed to load weights: {e}. Using defaults.")
-        return DEFAULT_WEIGHTS.copy()
+        logging.error(f"❌ Failed to load trades: {e}")
+        return []
 
 
-def save_weights(weights: Dict[str, float]):
-    """Save updated weights to file."""
-    os.makedirs(LOGS_DIR, exist_ok=True)
-    try:
-        with open(WEIGHTS_FILE, "w") as f:
-            json.dump(weights, f, indent=2)
-        logging.info(f"💾 Saved updated weights: {weights}")
-    except Exception as e:
-        logging.error(f"❌ Failed to save weights: {e}")
-
-
-def analyze_trade_performance(trades: List[Dict]) -> Optional[Dict[str, float]]:
-    """
-    Analyze trade outcomes and return adjustment factors for each signal.
-    Increases weight if signal predicted winners, decreases if linked to losers.
-    """
-    adjustments = {k: 1.0 for k in DEFAULT_WEIGHTS.keys()}
-
-    total_profitable = 0
-    signal_success = {k: 0 for k in adjustments}
-    signal_count = {k: 0 for k in adjustments}
+def calculate_signal_success(trades: List[Dict]) -> Dict[str, float]:
+    """Calculate success rate for each signal type."""
+    scores = {signal: {"success": 0, "total": 0} for signal in DEFAULT_WEIGHTS}
 
     for trade in trades:
-        try:
-            outcome = trade.get("pnl", 0) > 0  # True if profitable
-            signals = trade.get("signals", {})
+        signals = trade.get("signals", {})
+        # For now, assume all trades are "successful" if confidence > 0.5
+        # In future, integrate with Alpaca PnL
+        success = trade.get("confidence", 0) > 0.5
 
-            if outcome:
-                total_profitable += 1
+        for signal, present in signals.items():
+            if present and signal in scores:
+                scores[signal]["total"] += 1
+                if success:
+                    scores[signal]["success"] += 1
 
-            for signal in signal_count:
-                if signals.get(signal, False):
-                    signal_count[signal] += 1
-                    if outcome:
-                        signal_success[signal] += 1
-
-        except Exception as e:
-            logging.warning(f"⚠️ Failed to analyze trade: {e}")
-            continue
-
-    # Update adjustment factors
-    for signal in adjustments:
-        count = signal_count[signal]
-        success = signal_success[signal]
-        success_rate = success / count if count > 0 else 0.0
-
-        if success_rate > 0.6:
-            adjustments[signal] = 1.1  # Boost weight by 10%
-        elif success_rate < 0.4:
-            adjustments[signal] = 0.9  # Reduce weight by 10%
+    # Calculate boost factor
+    updated_weights = {}
+    for signal, data in scores.items():
+        if data["total"] == 0:
+            boost = 1.0
         else:
-            adjustments[signal] = 1.0  # No change
+            win_rate = data["success"] / data["total"]
+            if win_rate > 0.6:
+                boost = 1.1  # Boost high-performing signals
+            elif win_rate < 0.4:
+                boost = 0.9  # Reduce weak signals
+            else:
+                boost = 1.0
+        updated_weights[signal] = max(0.5, min(2.0, DEFAULT_WEIGHTS[signal] * boost))
 
-        logging.info(f"📊 {signal}: {success}/{count} wins ({success_rate:.2f}) → adjustment: x{adjustments[signal]}")
-
-    return adjustments
+    return updated_weights
 
 
 def update_strategy_weights():
-    """
-    Main function: Load trade logs, analyze performance, update weights.
-    """
-    log_file = os.path.join(LOGS_DIR, "weekly_trades.jsonl")
-    if not os.path.exists(log_file):
-        logging.warning(f"⚠️ No trade log found at {log_file}. Skipping self-learning.")
-        return
+    """Run weekly AI review and update strategy."""
+    logging.info("📅 Starting weekly AI review and self-learning update...")
 
-    trades = []
-    with open(log_file, "r") as f:
-        for line in f:
-            try:
-                trades.append(json.loads(line.strip()))
-            except Exception as e:
-                logging.warning(f"⚠️ Failed to parse log line: {e}")
+    try:
+        trades = load_trades()
+        if not trades:
+            msg = "⚠️ No trades this week. Keeping current weights."
+            logging.info(msg)
+            send_sync(msg)
+            return
 
-    if not trades:
-        logging.info("ℹ️ No trades to learn from this week.")
-        return
+        old_weights = load_weights()
+        new_weights = calculate_signal_success(trades)
 
-    logging.info(f"🧠 Starting self-learning from {len(trades)} trades")
+        # Save new weights
+        with open(WEIGHTS_FILE, "w") as f:
+            json.dump(new_weights, f, indent=2)
 
-    # Load current weights
-    weights = load_weights()
+        # Send summary
+        summary = f"""
+🧠 **Weekly AI Review Complete**
 
-    # Analyze performance
-    adjustments = analyze_trade_performance(trades)
-    if not adjustments:
-        return
+📈 **Signal Performance & Weight Updates:**
+- Political: {old_weights.get('political', 1.0):.2f} → {new_weights['political']:.2f}
+- Sentiment: {old_weights.get('sentiment', 1.0):.2f} → {new_weights['sentiment']:.2f}
+- Fundamentals: {old_weights.get('fundamentals', 1.0):.2f} → {new_weights['fundamentals']:.2f}
+- Technical: {old_weights.get('technical', 1.0):.2f} → {new_weights['technical']:.2f}
 
-    # Apply adjustments
-    updated_weights = {sig: weights[sig] * adjustments[sig] for sig in weights}
-    logging.info(f"📈 Updated weights before normalization: {updated_weights}")
+📊 Analyzed {len(trades)} trades this week.
 
-    # Normalize to prevent runaway scaling
-    max_weight = max(updated_weights.values())
-    normalized_weights = {k: v / max_weight for k, v in updated_weights.items()}
-    logging.info(f"🎯 Final normalized weights: {normalized_weights}")
+🚀 AI has evolved. Ready for Week {datetime.now().isocalendar()[1] + 1}.
+        """.strip()
 
-    # Save
-    save_weights(normalized_weights)
+        logging.info("✅ Weekly AI review complete. Strategy updated.")
+        send_sync(summary)
 
-    # Send summary (optional: hook into Telegram later)
-    print(f"✅ Self-learning complete. Updated strategy weights based on {len(trades)} trades.")
+    except Exception as e:
+        error_msg = f"❌ Weekly review failed: {e}"
+        logging.error(error_msg)
+        send_sync(error_msg)
 
 
-# === Main Execution (for testing) ===
-if __name__ == "__main__":
-    print("🧪 Running self-learning engine...")
-    update_strategy_weights()
+def load_weights() -> Dict[str, float]:
+    """Load current signal weights."""
+    try:
+        with open(WEIGHTS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return DEFAULT_WEIGHTS.copy()
