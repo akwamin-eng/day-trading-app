@@ -7,7 +7,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7856499764:AAHEDWJaz1KukBn-2gjVx5ea0LHfZPZpFoI")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "7856499764")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "7930119115")
 SEND_URL = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
 
