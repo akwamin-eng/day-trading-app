@@ -7,3 +7,5 @@ tenacity==9.1.2
 pybreaker==1.4.0
 beautifulsoup4==4.13.4
 python-telegram-bot==20.8
+transformers==4.45.0
+torch==2.4.0

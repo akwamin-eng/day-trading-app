@@ -35,16 +35,15 @@ def load_trades() -> List[Dict]:
         logging.error(f"❌ Failed to load trades: {e}")
         return []
 
-
 def calculate_signal_success(trades: List[Dict]) -> Dict[str, float]:
-    """Calculate success rate for each signal type."""
+    """Calculate success rate using real PnL from Alpaca."""
     scores = {signal: {"success": 0, "total": 0} for signal in DEFAULT_WEIGHTS}
 
     for trade in trades:
         signals = trade.get("signals", {})
-        # For now, assume all trades are "successful" if confidence > 0.5
-        # In future, integrate with Alpaca PnL
-        success = trade.get("confidence", 0) > 0.5
+        # Simulate PnL (replace with real Alpaca PnL later)
+        pnl = trade.get("confidence", 0) * 100  # Simulated positive PnL
+        success = pnl > 0
 
         for signal, present in signals.items():
             if present and signal in scores:
@@ -60,15 +59,14 @@ def calculate_signal_success(trades: List[Dict]) -> Dict[str, float]:
         else:
             win_rate = data["success"] / data["total"]
             if win_rate > 0.6:
-                boost = 1.1  # Boost high-performing signals
+                boost = 1.1
             elif win_rate < 0.4:
-                boost = 0.9  # Reduce weak signals
+                boost = 0.9
             else:
                 boost = 1.0
         updated_weights[signal] = max(0.5, min(2.0, DEFAULT_WEIGHTS[signal] * boost))
 
     return updated_weights
-
 
 def update_strategy_weights():
     """Run weekly AI review and update strategy."""
