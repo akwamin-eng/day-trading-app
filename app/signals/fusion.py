@@ -1,15 +1,14 @@
 # app/signals/fusion.py
 
 """
-Signal Fusion Engine – Final Production Version
-✅ Stable | ✅ Secure | ✅ Working
+Signal Fusion Engine
 Combines political, sentiment, fundamentals, and technicals
 Applies elite risk controls:
-- 1% Risk Rule (Paul Tudor Jones)
-- ATR Position Sizing (Turtle Trading)
-- Top-Down Market Filter (Livermore + Bridgewater)
-- Caches FMP data to avoid rate limits
-All data from FMP — no yfinance, no broken APIs
+- ✅ 1% Risk Rule (Paul Tudor Jones)
+- ✅ ATR Position Sizing (Turtle Trading)
+- ✅ Top-Down Market Filter (Livermore + Bridgewater)
+- ✅ AI Voice Alerts via Telegram
+All data from FMP — no broken scrapers.
 """
 
 import json
@@ -17,15 +16,16 @@ import requests
 import logging
 from typing import Dict, Optional
 from datetime import datetime
+import os
 
-# Delayed import (set in main.py)
+# Delayed import (imported in main.py)
 send_sync = None
 
 # === CONFIGURATION ===
 FMP_API_KEY = "ZqXPebgZUwpofOO3MUxNlCY4Iu9Mkw1c"
-FMP_PROFILE_URL = "https://financialmodelingprep.com/api/v3/profile/{symbol}"
 FMP_TECHNICAL_URL = "https://financialmodelingprep.com/api/v3/technical_indicator/daily/{symbol}"
-FMP_HISTORICAL_URL = "https://financialmodelingprep.com/api/v3/historical-price-full/SPY"
+FMP_HISTORICAL_URL = "https://financialmodelingprep.com/api/v3/historical-price-full/{symbol}"
+FMP_PROFILE_URL = "https://financialmodelingprep.com/api/v3/profile/{symbol}"
 
 # Paths
 WEIGHTS_FILE = "trading_logs/signal_weights.json"
@@ -36,135 +36,15 @@ DEFAULT_WEIGHTS = {
     "technical": 1.0
 }
 
-# In-memory cache for fundamentals
-_fundamentals_cache = {}
-
 
 def load_weights() -> Dict[str, float]:
-    """Load learned signal weights from file."""
+    """Load learned signal weights."""
     try:
         with open(WEIGHTS_FILE, "r") as f:
             return json.load(f)
     except Exception as e:
         logging.warning(f"⚠️ Could not load weights: {e}. Using defaults.")
         return DEFAULT_WEIGHTS.copy()
-
-
-def get_fundamentals(symbol: str) -> Optional[Dict]:
-    """Fetch company fundamentals from FMP with caching."""
-    if symbol in _fundamentals_cache:
-        logging.info(f"📊 Using cached fundamentals for {symbol}")
-        return _fundamentals_cache[symbol]
-
-    url = FMP_PROFILE_URL.format(symbol=symbol)
-    params = {"apikey": FMP_API_KEY}
-    try:
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if data and isinstance(data, list) and len(data) > 0:
-            _fundamentals_cache[symbol] = data[0]
-            return data[0]
-        else:
-            logging.warning(f"⚠️ No fundamentals data for {symbol}")
-            return None
-    except Exception as e:
-        logging.error(f"❌ Failed to fetch fundamentals for {symbol}: {e}")
-        return None
-
-
-def get_technical_signal(symbol: str) -> str:
-    """Fetch RSI and Bollinger Bands from FMP."""
-    url = FMP_TECHNICAL_URL.format(symbol=symbol)
-    params = {"type": "rsi,bb", "apikey": FMP_API_KEY}
-    try:
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if not data or len(data) < 2:
-            return "neutral"
-        latest = data[0]
-        rsi = latest.get("rsi")
-        lower_bb = latest.get("lowerBB")
-        close = latest.get("close")
-        if not all([rsi, lower_bb, close]):
-            return "neutral"
-        if close < lower_bb and rsi < 30:
-            return "buy"
-        elif close > upper_bb and rsi > 70:
-            return "sell"
-        return "neutral"
-    except Exception as e:
-        logging.error(f"❌ FMP technical fetch failed for {symbol}: {e}")
-        return "neutral"
-
-
-def get_market_regime() -> str:
-    """Detect bull/bear/neutral using SPY data from FMP."""
-    url = FMP_HISTORICAL_URL
-    params = {"apikey": FMP_API_KEY}
-    try:
-        resp = requests.get(url, params=params, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
-        if "historical" not in data or len(data["historical"]) < 50:
-            return "neutral"
-        prices = [day["close"] for day in data["historical"]]
-        current_price = prices[-1]
-        sma = sum(prices[-50:]) / 50
-        # Simplified RSI
-        gains = sum(max(0, prices[i] - prices[i-1]) for i in range(-14, 0))
-        losses = sum(max(0, prices[i-1] - prices[i]) for i in range(-14, 0))
-        avg_gain = gains / 14
-        avg_loss = losses / 14
-        rs = avg_gain / avg_loss if avg_loss != 0 else 100
-        rsi = 100 - (100 / (1 + rs))
-        if current_price > sma and rsi > 50:
-            return "bull"
-        elif current_price < sma and rsi < 40:
-            return "bear"
-        return "neutral"
-    except Exception as e:
-        logging.error(f"❌ Failed to detect regime: {e}")
-        return "neutral"
-
-
-def is_top_down_aligned(symbol: str) -> bool:
-    """Check if market, sector, and stock are all aligned."""
-    try:
-        # 1. Market Trend (SPY > 50-day SMA)
-        market_regime = get_market_regime()
-        if market_regime == "bear":
-            return False
-
-        # 2. Sector Strength (simplified: assume tech is strong)
-        sector_map = {
-            "RARE": "Technology", "NVDA": "Technology", "AMD": "Technology",
-            "TSLA": "Automotive", "AAPL": "Technology", "MSFT": "Technology",
-            "GOOGL": "Technology", "META": "Technology"
-        }
-        if sector_map.get(symbol) == "Technology":
-            sector_momentum = True
-        else:
-            sector_momentum = False
-
-        # 3. Stock Momentum (price > 50-day SMA)
-        fundamentals = get_fundamentals(symbol)
-        price = float(fundamentals.get("price", 0)) if fundamentals else 0
-        sma50 = float(fundamentals.get("image", {}).get("sma50", 0)) if fundamentals else 0
-        stock_momentum = price > sma50
-
-        # Log alignment status
-        aligned = market_regime != "bear" and sector_momentum and stock_momentum
-        logging.info(
-            f"📊 Top-down check for {symbol}: "
-            f"Market={market_regime}, Sector={sector_momentum}, Stock={stock_momentum} → {aligned}"
-        )
-        return aligned
-
-    except Exception as e:
-        logging.error(f"❌ Top-down check failed for {symbol}: {e}")
-        return False
 
 
 def get_atr(symbol: str, period: int = 14) -> float:
@@ -179,6 +59,96 @@ def get_atr(symbol: str, period: int = 14) -> float:
     except Exception as e:
         logging.error(f"❌ Failed to fetch ATR for {symbol}: {e}")
         return 1.0
+
+
+def get_technical_signal(symbol: str) -> str:
+    """Fetch RSI from FMP."""
+    url = FMP_TECHNICAL_URL.format(symbol=symbol)
+    params = {"type": "rsi", "apikey": FMP_API_KEY}
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            return "neutral"
+        rsi = data[0].get("rsi")
+        if rsi and rsi < 30:
+            return "buy"
+        elif rsi and rsi > 70:
+            return "sell"
+        return "neutral"
+    except Exception as e:
+        logging.error(f"❌ FMP technical fetch failed for {symbol}: {e}")
+        return "neutral"
+
+
+def get_fundamentals(symbol: str) -> Optional[Dict]:
+    """Fetch fundamentals from FMP."""
+    url = FMP_PROFILE_URL.format(symbol=symbol)
+    params = {"apikey": FMP_API_KEY}
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0]
+        return None
+    except Exception as e:
+        logging.error(f"❌ Failed to fetch fundamentals: {e}")
+        return None
+
+
+def get_market_regime() -> str:
+    """Detect bull/bear/neutral using SPY data from FMP."""
+    url = FMP_HISTORICAL_URL.format(symbol="SPY")
+    params = {"apikey": FMP_API_KEY}
+    try:
+        resp = requests.get(url, params=params, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        if "historical" not in data or len(data["historical"]) < 50:
+            return "neutral"
+        prices = [day["close"] for day in data["historical"][-50:]]
+        sma = sum(prices) / 50
+        return "bull" if prices[-1] > sma else "bear"
+    except Exception as e:
+        logging.error(f"❌ Failed to detect regime: {e}")
+        return "neutral"
+
+
+def is_top_down_aligned(symbol: str) -> bool:
+    """Check if market, sector, and stock are all aligned."""
+    try:
+        # 1. Market Trend
+        market_regime = get_market_regime()
+        if market_regime == "bear":
+            return False
+
+        # 2. Sector Strength (simplified)
+        sector_map = {
+            "RARE": "Technology", "NVDA": "Technology", "AMD": "Technology",
+            "TSLA": "Automotive", "AAPL": "Technology", "MSFT": "Technology",
+            "GOOGL": "Technology", "META": "Technology"
+        }
+        sector_momentum = sector_map.get(symbol) == "Technology"
+
+        # 3. Stock Momentum
+        fundamentals = get_fundamentals(symbol)
+        price = float(fundamentals.get("price", 0)) if fundamentals else 0
+        sma50 = float(fundamentals.get("image", {}).get("sma50", 0)) if fundamentals else 0
+        stock_momentum = price > sma50
+
+        # Log alignment
+        aligned = market_regime != "bear" and sector_momentum and stock_momentum
+        logging.info(
+            f"📊 Top-down check for {symbol}: "
+            f"Market={market_regime}, Sector={sector_momentum}, Stock={stock_momentum} → {aligned}"
+        )
+        return aligned
+
+    except Exception as e:
+        logging.error(f"❌ Top-down check failed for {symbol}: {e}")
+        return False
 
 
 def generate_fused_signal(symbol: str, political_buy: bool = False):
@@ -196,8 +166,8 @@ def generate_fused_signal(symbol: str, political_buy: bool = False):
     else:
         logging.info(f"❌ No political buy for {symbol}")
 
-    # 2. Sentiment (simulated — replace with FinBERT later)
-    sentiment_score = 0.7  # Simulated positive sentiment
+    # 2. Sentiment (simulated for now)
+    sentiment_score = 0.7
     if sentiment_score > 0.5:
         total_score += 1.0 * weights["sentiment"]
         reasons.append(f"Sentiment: {sentiment_score:.2f}")
@@ -206,7 +176,7 @@ def generate_fused_signal(symbol: str, political_buy: bool = False):
 
     # 3. Fundamentals
     fundamentals = get_fundamentals(symbol)
-    peg_ratio = float(fundamentals.get("PEGRatio", 999)) if fundamentals else 999
+    peg_ratio = float(fundamentals.get("priceToEarningsRatio", 999)) if fundamentals else 999
     if fundamentals and peg_ratio < 1.0:
         total_score += 1.0 * weights["fundamentals"]
         reasons.append(f"PEG: {peg_ratio:.2f}")
@@ -217,7 +187,7 @@ def generate_fused_signal(symbol: str, political_buy: bool = False):
     tech_signal = get_technical_signal(symbol)
     if tech_signal == "buy":
         total_score += 1.0 * weights["technical"]
-        reasons.append("RSI < 30 & price near lower Bollinger")
+        reasons.append("RSI < 30")
     elif tech_signal == "sell":
         logging.info(f"❌ Technical sell signal for {symbol}")
         return None
@@ -227,7 +197,7 @@ def generate_fused_signal(symbol: str, political_buy: bool = False):
     # 5. Market Regime
     regime = get_market_regime()
     if regime == "bear":
-        total_score *= 0.5  # Reduce confidence in bear market
+        total_score *= 0.5
         logging.info(f"📉 Market regime: {regime.upper()} → reducing signal strength")
     else:
         logging.info(f"📈 Market regime: {regime.upper()} → normal confidence")
@@ -239,7 +209,7 @@ def generate_fused_signal(symbol: str, political_buy: bool = False):
 
     # Final Decision
     if total_score >= 2.5:
-        # Calculate position size using 1% risk rule and ATR
+        # Calculate position size
         atr = get_atr(symbol)
         if atr <= 0:
             logging.warning(f"⚠️ ATR is invalid for {symbol} → skipping trade")
@@ -250,15 +220,15 @@ def generate_fused_signal(symbol: str, political_buy: bool = False):
             logging.warning(f"⚠️ Invalid entry price for {symbol} → skipping trade")
             return None
 
-        stop_loss_price = entry_price - (atr * 2)  # 2x ATR stop
+        stop_loss_price = entry_price - (atr * 2)
         risk_per_share = entry_price - stop_loss_price
 
         if risk_per_share <= 0:
             logging.warning(f"⚠️ Invalid risk_per_share for {symbol} → skipping trade")
             return None
 
-        account_capital = 100000  # Replace with real balance later
-        max_risk_per_trade = account_capital * 0.01  # 1% rule
+        account_capital = 100000
+        max_risk_per_trade = account_capital * 0.01
         qty = int(max_risk_per_trade / risk_per_share)
 
         if qty == 0:
@@ -287,7 +257,7 @@ def generate_fused_signal(symbol: str, political_buy: bool = False):
 
 
 def execute_paper_trade(signal: Dict):
-    """Execute a paper trade based on fused signal."""
+    """Execute a paper trade and send AI voice alert."""
     try:
         qty = signal.get("quantity", 1)
         if qty == 0:
@@ -297,7 +267,7 @@ def execute_paper_trade(signal: Dict):
         logging.info(f"✅ Paper trade executed: Buy {qty} shares of {signal['symbol']} at ${signal['entry_price']:.2f}")
         logging.info(f"📉 Stop Loss: ${signal['stop_loss']:.2f}")
 
-        # Send Telegram alert
+        # Send Telegram text alert
         message = f"""
 🎯 **High-Conviction Buy Signal**
 📊 {signal['symbol']} (Confidence: {signal['confidence']:.2f})
@@ -312,5 +282,39 @@ def execute_paper_trade(signal: Dict):
         print(f"📢 Telegram Alert: {message}")
         send_sync(message)
 
+        # Send AI voice alert
+        try:
+            from app.utils.voice_alert import send_voice_alert
+            voice_text = (
+                f"High conviction buy signal. "
+                f"Buying {qty} shares of {signal['symbol']} "
+                f"at {signal['entry_price']} dollars. "
+                f"Stop loss at {signal['stop_loss']} dollars. "
+                f"Confidence level: {int(signal['confidence'] * 100)} percent."
+            )
+            send_voice_alert(
+                message=voice_text,
+                bot_token=os.getenv("TELEGRAM_BOT_TOKEN"),
+                chat_id=os.getenv("TELEGRAM_CHAT_ID")
+            )
+        except Exception as e:
+            logging.warning(f"⚠️ Voice alert failed: {e}")
+
+        # Log to file
+        os.makedirs("trading_logs", exist_ok=True)
+        log_entry = {
+            "symbol": signal["symbol"],
+            "action": "buy",
+            "quantity": qty,
+            "entry_price": signal["entry_price"],
+            "stop_loss": signal["stop_loss"],
+            "confidence": signal["confidence"],
+            "reason": signal["reason"],
+            "regime": signal["regime"],
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        with open("trading_logs/weekly_trades.jsonl", "a") as f:
+            f.write(f"{json.dumps(log_entry)}\n")
+
     except Exception as e:
-        logging.error(f"❌ Trade failed: {e}")
+        logging.error(f"❌ Trade execution failed: {e}")
