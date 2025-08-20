@@ -1,1 +1,6 @@
-{"political": 1.0, "sentiment": 1.0, "fundamentals": 1.0, "technical": 1.0}
+{
+  "political": 1.0,
+  "sentiment": 1.0,
+  "fundamentals": 1.0,
+  "technical": 1.0
+}
