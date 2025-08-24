@@ -389,6 +389,5 @@ def home():
     status = "online" if is_market_open() else "standby"
     return jsonify({"status": status, "market_open": is_market_open()})
 
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8080))
-    app.run(host="0.0.0.0", port=port, debug=False)
+# DO NOT use app.run() in production
+# Use gunicorn via Dockerfile

@@ -1,27 +1,12 @@
-# Dockerfile
-
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system tools
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy requirements
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copy application
 COPY . .
 
-# Expose port
-ENV PORT=8080
 EXPOSE 8080
 
-# Run the app
-CMD ["python", "main.py"]
+CMD exec gunicorn --bind :$PORT --workers 1 --worker-class gthread --threads 8 --timeout 30 --keep-alive 5 main:app
