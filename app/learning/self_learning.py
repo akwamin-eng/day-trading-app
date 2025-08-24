@@ -1,94 +1,70 @@
 # app/learning/self_learning.py
-
 """
-Self-Learning Engine
-Analyzes paper trades and updates signal weights based on PnL
+Reinforcement Learning Engine
+Updates signal weights based on real PnL from Alpaca paper trades
 """
-
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from collections import defaultdict
 
-# Setup
-logging.basicConfig(level=logging.INFO)
-LOG_FILE = "trading_logs/weekly_trades.jsonl"
 WEIGHTS_FILE = "trading_logs/signal_weights.json"
-DEFAULT_WEIGHTS = {
-    "political": 1.0,
-    "sentiment": 1.0,
-    "fundamentals": 1.0,
-    "technical": 1.0
-}
+DEFAULT = {"political": 1.0, "news": 1.0, "technical": 1.0}
 
-
-def load_trades(days=1):
-    """Load trades from last N days"""
-    if not os.path.exists(LOG_FILE):
-        logging.info("📊 No trade logs found")
+def load_trades(days=7):
+    if not os.path.exists("trading_logs/trades.jsonl"):
         return []
-
-    cutoff = (datetime.utcnow() - timedelta(days=days)).isoformat()
     trades = []
-    with open(LOG_FILE, "r") as f:
+    with open("trading_logs/trades.jsonl", "r") as f:
         for line in f:
             try:
                 trade = json.loads(line.strip())
-                if trade["timestamp"] >= cutoff:
-                    trades.append(trade)
-            except Exception as e:
-                logging.warning(f"⚠️ Failed to parse trade: {e}")
-    logging.info(f"📊 Loaded {len(trades)} trades from last {days} day(s)")
+                trades.append(trade)
+            except: pass
     return trades
 
-
-def calculate_win_rate(trades, signal_name):
-    """Calculate win rate for a given signal"""
-    if not trades:
-        return 0.5  # Neutral
-
-    results = []
-    for trade in trades:
-        # Simulated PnL: use confidence * 100 for now
-        pnl = trade.get("confidence", 0.5) * 100
-        if trade.get("signals", {}).get(signal_name, False):
-            results.append(1 if pnl > 0 else 0)
-
-    return sum(results) / len(results) if results else 0.5
-
-
 def update_signal_weights():
-    """Update weights based on recent performance"""
-    logging.info("🧠 Starting self-learning engine...")
+    logger = logging.getLogger(__name__)
+    logger.info("🧠 Starting Reinforcement Learning...")
 
-    trades = load_trades(days=1)
+    trades = load_trades()
     if not trades:
-        logging.info("🧠 No trades today — keeping current weights")
+        logger.info("🧠 No trades yet — keeping current weights")
         return
 
+    # Calculate performance by signal
+    results = defaultdict(list)
+    for trade in trades:
+        if trade["action"] == "sell":
+            # Link to buy
+            buys = [t for t in trades if t["action"] == "buy" and t["symbol"] == trade["symbol"]]
+            if buys:
+                buy = buys[-1]
+                pnl = trade["pnl"] if "pnl" in trade else 0.0
+                if "Political" in buy["reason"]:
+                    results["political"].append(pnl)
+                if "news" in buy["reason"]:
+                    results["news"].append(pnl)
+                if "RSI" in buy["reason"]:
+                    results["technical"].append(pnl)
+
+    # Update weights
     try:
         with open(WEIGHTS_FILE, "r") as f:
-            current_weights = json.load(f)
-    except Exception as e:
-        logging.warning(f"⚠️ Could not load weights: {e}. Using defaults.")
-        current_weights = DEFAULT_WEIGHTS.copy()
+            weights = json.load(f)
+    except: weights = DEFAULT.copy()
 
     new_weights = {}
-    for signal in current_weights.keys():
-        win_rate = calculate_win_rate(trades, signal)
-        if win_rate > 0.6:
-            new_weights[signal] = current_weights[signal] * 1.1  # Boost
-        elif win_rate < 0.4:
-            new_weights[signal] = current_weights[signal] * 0.9  # Reduce
+    for signal, pnl_list in results.items():
+        avg_pnl = sum(pnl_list) / len(pnl_list)
+        if avg_pnl > 0.015:
+            new_weights[signal] = weights.get(signal, 1.0) * 1.1
+        elif avg_pnl < -0.005:
+            new_weights[signal] = weights.get(signal, 1.0) * 0.9
         else:
-            new_weights[signal] = current_weights[signal]  # Keep
+            new_weights[signal] = weights.get(signal, 1.0)
 
-    # Save updated weights
     with open(WEIGHTS_FILE, "w") as f:
         json.dump(new_weights, f, indent=2)
 
-    logging.info(f"✅ Updated signal weights: {new_weights}")
-
-
-if __name__ == "__main__":
-    update_signal_weights()
+    logger.info(f"✅ ML Updated Weights: {new_weights}")

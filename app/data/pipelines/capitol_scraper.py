@@ -1,74 +1,54 @@
 # app/data/pipelines/capitol_scraper.py
-
 """
-Scrape recent political trades from capitoltrades.com
-Saves to data/outputs/capitol_trades.json
+Scrape political buys from capitoltrades.com
+Updated for 2025 React-rendered site
 """
-
 import requests
 from bs4 import BeautifulSoup
-import json
 import logging
-from datetime import datetime
+import json
+import os
+import time
 
-# Setup
 logging.basicConfig(level=logging.INFO)
 OUTPUT_FILE = "data/outputs/capitol_trades.json"
-URL = "https://www.capitoltrades.com/trades/"
 
-def scrape_capitol_trades():
-    """Scrape political trades."""
+def get_political_buys():
+    url = "https://www.capitoltrades.com/trades/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+    }
+
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
-        }
-        resp = requests.get(URL, headers=headers, timeout=10)
+        logging.info("🧪 Starting Capitol Trades Scraper...")
+        time.sleep(1)
+        resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
 
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        trades = []
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        symbols = []
 
-        # Updated selector: find all trade rows
-        rows = soup.find_all('div', class_='trade-row')
-        if not rows:
-            # Fallback: look for data in script tags (SPA)
-            script = soup.find('script', text=lambda t: t and 'window.__INITIAL_STATE__' in t)
-            if script:
-                logging.info("📄 Found SPA data in script tag")
-                # Extract JSON from script (simplified)
-                # In practice, you'd parse __INITIAL_STATE__
-                logging.warning("⚠️ SPA parsing not implemented — use API or wait for fix")
-                return []
+        # Look for stock ticker links
+        for link in soup.find_all('a', href=True):
+            href = link['href']
+            if "/trades/stock/" in href:
+                symbol = link.get_text().strip()
+                if len(symbol) <= 5 and symbol.isalpha():
+                    # Check parent for "Buy"
+                    parent = link.find_parent()
+                    if parent and ("Buy" in str(parent) or "Purchase" in str(parent)):
+                        symbols.append(symbol)
 
-        for row in rows[:20]:  # Limit to 20
-            try:
-                cols = row.find_all('div')
-                if len(cols) >= 5:
-                    trade = {
-                        "rep": cols[0].get_text(strip=True),
-                        "ticker": cols[1].get_text(strip=True),
-                        "asset": cols[2].get_text(strip=True),
-                        "type": cols[3].get_text(strip=True),
-                        "filed": cols[4].get_text(strip=True),
-                        "traded": cols[5].get_text(strip=True) if len(cols) > 5 else ""
-                    }
-                    trades.append(trade)
-            except Exception as e:
-                logging.error(f"❌ Failed to parse row: {e}")
+        # Dedupe
+        symbols = list(set(symbols))
+        logging.info(f"✅ Successfully scraped {len(symbols)} political buys: {symbols}")
 
-        # Save to file
         os.makedirs("data/outputs", exist_ok=True)
         with open(OUTPUT_FILE, "w") as f:
-            json.dump(trades, f, indent=2)
+            json.dump(symbols, f, indent=2)
 
-        logging.info(f"✅ Successfully scraped {len(trades)} trades")
-        logging.info(f"💾 Saved to {OUTPUT_FILE}")
-        return trades
+        return symbols
 
     except Exception as e:
-        logging.error(f"❌ Failed to scrape capitoltrades.com: {e}")
+        logging.error(f"❌ Scraping failed: {e}")
         return []
-
-if __name__ == "__main__":
-    logging.info("🧪 Starting Capitol Trades Scraper...")
-    trades = scrape_capitol_trades()

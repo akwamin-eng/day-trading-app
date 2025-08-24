@@ -1,36 +1,38 @@
 # telegram_sync.py
-
 import requests
 import os
 import re
+import logging  # ✅ This was missing!
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "7856499764:AAHEDWJaz1KukBn-2gjVx5ea0LHfZPZpFoI")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "7930119115")
+# Setup logging if not already configured
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
 
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def escape_markdown_v2(text: str) -> str:
-    escape_chars = r'\_*[]()~`>#+-=|{}.!'
-    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
-
+def escape_md(text: str) -> str:
+    return re.sub(r'([_*\[\]()~`>#+-=|{}.!])', r'\\\1', text)
 
 def send_sync(message: str):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("❌ Telegram: Missing BOT_TOKEN or CHAT_ID")
+        logging.error("❌ Telegram: Missing BOT_TOKEN or CHAT_ID")
         return
 
-    escaped = escape_markdown_v2(message)
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
-        "text": escaped,
+        "text": escape_md(message),
         "parse_mode": "MarkdownV2",
         "disable_web_page_preview": True
     }
     try:
-        response = requests.post(url, json=payload, timeout=10)
-        if response.status_code == 200:
-            print("✅ Telegram alert sent")
+        resp = requests.post(url, json=payload, timeout=10)
+        if resp.status_code == 200:
+            logging.info("✅ Telegram alert sent")
         else:
-            print(f"❌ Telegram API error: {response.status_code}, {response.text}")
+            logging.error(f"❌ Telegram API error: {resp.status_code}, {resp.text}")
     except Exception as e:
-        print(f"❌ Failed to send Telegram: {e}")
+        logging.error(f"❌ Failed to send Telegram: {e}")

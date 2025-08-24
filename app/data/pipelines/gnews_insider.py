@@ -1,45 +1,40 @@
 # app/data/pipelines/gnews_insider.py
-
-import requests
+"""
+Find stocks with 'insider buying' news
+"""
+from gnews import GNews
 import logging
-import json
-from datetime import datetime
-import os  # ✅ Add this line
 
-API_KEY = "c026fd5200d848066e95943e8f40754b"
-BASE_URL = "https://gnews.io/api/v4/search"
+logging.basicConfig(level=logging.INFO)
 
-def search_insider_news(query="insider buying"):
-    params = {
-        "q": query,
-        "token": API_KEY,
-        "lang": "en",
-        "country": "us",
-        "max": 10
-    }
+def get_insider_news():
+    google_news = GNews(language='en', country='US', period='7d', max_results=10)
     try:
-        resp = requests.get(BASE_URL, params=params, timeout=10)
-        data = resp.json()
-        if data.get("code") == "invalid_token":
-            logging.error("❌ GNews: Invalid API key")
-            return None
-        data["retrieved_at"] = datetime.utcnow().isoformat()
-        return data
+        news = google_news.get_news("insider buying OR stock purchase OR CEO buys")
+        logging.info(f"🔍 Found {len(news)} insider-related articles")
+
+        # Expanded keyword map
+        ticker_map = {
+            "RARE": ["rare earth", "rare hospitality", "rare stock", "rare"],
+            "NVDA": ["nvidia", "jensen huang", "ai chip", "geforce", "data center"],
+            "TSLA": ["tesla", "elon musk", "cybertruck", "ai day", "fremont"],
+            "AMD": ["amd", "lisa su", "ryzen", "epyc", "chip"],
+            "GME": ["gamestop", "ryan cohen", "rc ventures", "meme stock"],
+            "AMC": ["amc", "adam aron", "meme stock", "theater"],
+            "SPY": ["s&p 500", "spdr", "index fund"]
+        }
+
+        results = {}
+        for article in news:
+            title = article['title'].lower()
+            for ticker, keywords in ticker_map.items():
+                if any(k in title for k in keywords):
+                    results[ticker] = "positive"
+                    logging.info(f"🎯 Matched {ticker} in: {title}")
+
+        logging.info(f"✅ Insider news signals: {results}")
+        return results
+
     except Exception as e:
-        logging.error(f"❌ GNews request failed: {e}")
-        return None
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    print("🧪 Testing GNews: Insider Buying News")
-    results = search_insider_news()  # ✅ Correct function name
-    if results:
-        articles = results.get("articles", [])
-        print(f"✅ Found {len(articles)} articles")
-        os.makedirs("data/outputs", exist_ok=True)
-        with open("data/outputs/gnews_insider.json", "w") as f:
-            json.dump(results, f, indent=2)
-        print("💾 Saved to data/outputs/gnews_insider.json")
-    else:
-        print("❌ No results or error")
+        logging.error(f"❌ GNews error: {e}")
+        return {}
